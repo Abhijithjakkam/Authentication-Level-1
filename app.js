@@ -5,7 +5,8 @@ const ejs = require("ejs");
 const bodyParser = require("body-parser");
 const { setEngine } = require("crypto");
 const mongoose = require("mongoose");
-var encrypt = require('mongoose-encryption');
+const bcrypt = require("bcrypt");
+const saltRounds = 12;
 
 
 const app = express();
@@ -20,9 +21,6 @@ const userSchema = new mongoose.Schema({
     email : String,
     password : String
 });
-
-const secret = process.env.SECRET;
-userSchema.plugin(encrypt, {secret: secret, encryptedFields: ['password']});
 
 const User = mongoose.model("User", userSchema);
 
@@ -42,11 +40,17 @@ app.route("/login")
 
        User.findOne({email : username})
         .then((founduser)=>{
-            if(founduser.password === password){
-                res.render("secrets");
-            }else{
-                res.send("Invalid Password");
-            }
+
+            bcrypt.compare(password, founduser.password).then((result)=> {
+                // result == true
+                if(result === true){
+                    res.render("secrets");
+                }else{
+                    res.send("Invalid Password");
+                }
+            });
+            
+          
         })
         .catch((error)=>{
             res.send("User not found");
@@ -60,17 +64,20 @@ app.route("/register")
     .post((req, res)=>{
         const email = req.body.username;
         const password = req.body.password;
-        const newUser = new User({
-            email : email,
-            password : password
+        bcrypt.hash(password, saltRounds).then((hash)=>{
+            // Store hash in your password DB.
+            const newUser = new User({
+                email : email,
+                password : hash
+            });
+            newUser.save()
+                .then(()=>{
+                    res.render("secrets");
+                })
+                .catch((error)=>{
+                    res.send(error);
+                })
         });
-        newUser.save()
-            .then(()=>{
-                res.render("secrets");
-            })
-            .catch((error)=>{
-                res.send(error);
-            })
     });
 
 app.listen(3000, (req, res)=>{
